@@ -50,7 +50,9 @@ jobs:
           targets: aarch64-linux-android
 
       - name: Install cargo-ndk
-        uses: taiki-e/install-action@cargo-ndk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
 
       - name: Cache Cargo & Gradle
         uses: actions/cache@v4
