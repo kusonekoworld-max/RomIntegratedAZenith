@@ -34,6 +34,7 @@ impl IAZenithService for AZenithService {
     fn setDisabled(&self, disabled: bool) -> BinderResult<bool> {
         let v = if disabled { "1" } else { "0" };
         crate::common::prop::setprop("persist.sys.azenithIntg.disabletweak", v);
+        crate::daemon::profiler::refresh_now("disabletweak changed");
         Ok(true)
     }
 
@@ -47,6 +48,9 @@ impl IAZenithService for AZenithService {
             return Ok(false);
         }
         crate::common::prop::setprop(&format!("persist.sys.azenithConfIntg.{key}"), value);
+        if key == "manual_profile" || key == "litemode" {
+            crate::daemon::profiler::refresh_now("config updated");
+        }
         Ok(true)
     }
 

@@ -259,6 +259,14 @@ pub(crate) fn rescan_games() -> bool {
     true
 }
 
+
+/// Return the stored per-game config map for a single package, if present.
+pub(crate) fn get_game_config(pkg: &str) -> Option<BTreeMap<String, String>> {
+    let mut store = CONFIGS.lock().unwrap_or_else(|e| e.into_inner());
+    ensure_configs_loaded(&mut store);
+    store.entries.get(pkg).cloned()
+}
+
 pub(crate) fn games() -> Vec<String> {
     st().list.iter().cloned().collect()
 }
