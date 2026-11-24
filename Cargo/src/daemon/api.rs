@@ -12,9 +12,9 @@ use vendor::azenith::IAZenithService::{BnAZenithService, IAZenithService};
 
 use crate::common::log::{comp, error, info};
 use crate::common::paths::STATE_FILE;
-use crate::daemon::applist;
+use crate::daemon::{applist, tasks};
 
-pub(crate) const IFACE_VERSION: i32 = 4;
+pub(crate) const IFACE_VERSION: i32 = 5;
 
 const SERVICE_NAME: &str = "vendor.azenith.IAZenithService/default";
 
@@ -48,7 +48,7 @@ impl IAZenithService for AZenithService {
             return Ok(false);
         }
         crate::common::prop::setprop(&format!("persist.sys.azenithConfIntg.{key}"), value);
-        if key == "manual_profile" || key == "litemode" {
+        if key == "manual_profile" || key == "litemode" || key == "AIenabled" {
             crate::daemon::profiler::refresh_now("config updated");
         }
         Ok(true)
@@ -92,6 +92,16 @@ impl IAZenithService for AZenithService {
 
     fn rescanGames(&self) -> BinderResult<bool> {
         Ok(applist::rescan_games())
+    }
+
+    // ---- v5 ----
+
+    fn startTask(&self, name: &str, arg: &str) -> BinderResult<bool> {
+        Ok(tasks::start(name, arg))
+    }
+
+    fn getTaskOutput(&self, name: &str) -> BinderResult<String> {
+        Ok(tasks::output(name))
     }
 }
 

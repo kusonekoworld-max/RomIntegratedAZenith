@@ -3,6 +3,10 @@
     public static void main(java.lang.String[]);
 }
 
+# The platform's real android.window.TaskFpsCallback is shadowed at runtime, so this stub must
+# keep its name or the callback would not be an instance of the class WMS checks against.
+-keep class android.window.TaskFpsCallback { *; }
+
 # Keep all public classes and methods
 -keep class zx.binder.** { *; }
 

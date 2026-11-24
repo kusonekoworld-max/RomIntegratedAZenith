@@ -8,6 +8,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::common::log::{comp, debug, info};
+use crate::common::android_ffi::prop_get;
 use crate::common::prop;
 use crate::common::shell;
 use crate::daemon::applist;
@@ -48,7 +49,21 @@ fn disable_tweak() -> bool {
     prop::getprop("persist.sys.azenithIntg.disabletweak") == "1"
 }
 
+/// Profile currently applied (0 = nothing yet).
+pub(crate) fn cur() -> u8 {
+    *CUR.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Manual mode = `AIenabled == "0"` (same meaning as AZenith main). In auto
+/// mode (default, "1") a leftover `manual_profile` is ignored.
+fn manual_mode() -> bool {
+    prop_get("persist.sys.azenithConfIntg.AIenabled").as_deref() == Some("0")
+}
+
 fn manual_profile_override() -> Option<u8> {
+    if !manual_mode() {
+        return None;
+    }
     match prop::getprop("persist.sys.azenithConfIntg.manual_profile").trim() {
         "1" => Some(MODE_PERF),
         "2" => Some(MODE_BALANCED),
@@ -290,6 +305,8 @@ fn apply(mode: u8, active: &Option<(String, BTreeSet<i32>)>, why: &str) {
 
     queue_profile(mode);
     broadcast_profile_change(mode, active);
+    // bypass charging only runs in performance
+    crate::cmd::bypass::reevaluate_async();
 }
 
 fn broadcast_profile_change(mode: u8, active: &Option<(String, BTreeSet<i32>)>) {

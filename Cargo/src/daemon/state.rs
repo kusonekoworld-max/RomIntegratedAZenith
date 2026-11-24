@@ -64,6 +64,12 @@ static LAST_STATE: Mutex<String> = Mutex::new(String::new());
 pub(crate) fn screen() -> &'static str { SYS.lock().unwrap_or_else(|e| e.into_inner()).screen }
 pub(crate) fn saver() -> &'static str { SYS.lock().unwrap_or_else(|e| e.into_inner()).saver }
 
+/// (battery level 0..=100 or -1 when unknown, charge state string).
+pub(crate) fn battery() -> (i32, &'static str) {
+    let s = SYS.lock().unwrap_or_else(|e| e.into_inner());
+    (s.level, s.charge)
+}
+
 // Write only when the contents change.
 fn write_state(pkg: &str, why: &str) {
     let s = SYS.lock().unwrap_or_else(|e| e.into_inner());
@@ -105,7 +111,10 @@ pub(crate) fn sys_update(why: &str, f: impl FnOnce(&mut SysStat)) {
     let pkg = active_pkg(&active);
     // screen / battery saver can change the profile (eco, grace period)
     profiler::checkup(&active, why);
+    crate::daemon::fps::set_wanted(active.is_some() && screen() != "off");
     write_state(&pkg, why);
+    // battery level / plug state changed: bypass charging may have to switch
+    crate::cmd::bypass::reevaluate_async();
 }
 
 // Update the active app, then let the profiler decide the profile (1/2/3).
@@ -119,6 +128,7 @@ pub(crate) fn apply(s: &mut St, why: &str) {
         debug!(comp::STATE, "active app unchanged ({pkg}) [{why}]");
     }
     profiler::checkup(&s.active, why);
+    crate::daemon::fps::set_wanted(s.active.is_some() && screen() != "off");
     write_state(&pkg, why);
 }
 

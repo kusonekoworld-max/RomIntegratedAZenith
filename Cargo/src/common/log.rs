@@ -54,8 +54,10 @@ pub(crate) mod comp {
     pub(crate) const APPLIST: &str = "daemon.applist";
     pub(crate) const STATE: &str = "daemon.state";
     pub(crate) const PROFILER: &str = "daemon.profiler";
+    pub(crate) const TASKS: &str = "daemon.tasks";
 
     // cmd.<command>.<subsystem>: the companion commands.
+    pub(crate) const BYPASS: &str = "cmd.bypass";
     pub(crate) const PRELOAD: &str = "cmd.preload";
     pub(crate) const SETTINGS_CPU: &str = "cmd.settings.cpu";
     pub(crate) const SETTINGS_RENDERER: &str = "cmd.settings.renderer";

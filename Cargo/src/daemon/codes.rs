@@ -11,6 +11,11 @@ use crate::common::log::{comp, debug, error, info, warn};
 use crate::common::paths::BINDER_RESOLVER_APK as APK_PATH;
 const RESOLVER_APK: &[u8] = include_bytes!("../../binder_resolver.apk");
 
+/// The embedded resolver APK (also carries `zx.binder.FpsClient`).
+pub(crate) fn resolver_apk() -> &'static [u8] {
+    RESOLVER_APK
+}
+
 pub(crate) struct Codes {
     pub(crate) reg: u32, pub(crate) fg_act: u32, pub(crate) fg_svc: u32,
     pub(crate) died: u32, pub(crate) pm_name: u32,

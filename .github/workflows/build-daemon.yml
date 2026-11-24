@@ -1,8 +1,13 @@
 name: Build ROM-Integrated AZenith Daemon
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ main, "feat/**" ]
+    paths-ignore:
+      - "prebuilt/**"
   workflow_dispatch:
     inputs:
       build_type:
@@ -29,6 +34,10 @@ on:
 jobs:
   build-daemon:
     runs-on: ubuntu-latest
+    env:
+      DT_TOKEN: ${{ secrets.DEVICE_TREE_TOKEN }}
+      DT_REPO: ${{ vars.DEVICE_TREE_REPO || 'crdroidandroid/android_device_xiaomi_creek' }}
+      DT_BRANCH: ${{ vars.DEVICE_TREE_BRANCH }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -117,3 +126,38 @@ jobs:
           name: azenith-rom-daemon-${{ github.sha }}
           path: rom-artifacts/
           if-no-files-found: error
+
+      - name: Commit prebuilt binary (for device tree sync)
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          set -euo pipefail
+          mkdir -p prebuilt/bin prebuilt/apk prebuilt/aidl/vendor/azenith
+          cp rom-artifacts/bin/vendor.azenith-service prebuilt/bin/vendor.azenith-service
+          cp rom-artifacts/apk/BinderResolver.apk prebuilt/apk/BinderResolver.apk
+          cp rom-artifacts/aidl/vendor/azenith/IAZenithService.aidl prebuilt/aidl/vendor/azenith/IAZenithService.aidl
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f prebuilt
+          if ! git diff --cached --quiet; then
+            git commit -m "prebuilt: update vendor.azenith-service [skip ci]"
+            git push
+          fi
+
+      - name: Push new daemon to the device tree
+        if: ${{ github.ref == 'refs/heads/main' && env.DT_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          BR=""; [ -n "${DT_BRANCH:-}" ] && BR="-b ${DT_BRANCH}"
+          git clone --depth 1 $BR "https://x-access-token:${DT_TOKEN}@github.com/${DT_REPO}.git" dt
+          mkdir -p dt/azenith/bin dt/azenith/apk dt/azenith/vendor/azenith
+          cp rom-artifacts/bin/vendor.azenith-service dt/azenith/bin/vendor.azenith-service
+          cp rom-artifacts/apk/BinderResolver.apk dt/azenith/apk/BinderResolver.apk
+          cp rom-artifacts/aidl/vendor/azenith/IAZenithService.aidl dt/azenith/vendor/azenith/IAZenithService.aidl
+          cd dt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "azenith: update daemon from ${GITHUB_REPOSITORY}@${GITHUB_SHA::7}"
+            git push
+          fi

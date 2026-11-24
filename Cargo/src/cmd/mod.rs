@@ -18,6 +18,7 @@
 //! Cross-cutting helpers (log writer, properties, sysfs writes, forked shell)
 //! live in [`crate::common`], not here.
 
+pub(crate) mod bypass;
 pub(crate) mod prefs;
 pub(crate) mod preload;
 pub(crate) mod settings;

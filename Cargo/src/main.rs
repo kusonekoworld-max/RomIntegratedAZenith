@@ -29,8 +29,45 @@ fn subcommand(name: &str) -> Option<&'static str> {
         "utilityconf" | "utility" | "sys.azenith-utilityconf" => cmd::UTILITYCONF,
         "preferencedtweaks" | "prefs" | "preferenced" | "sys.azenith-preferencedtweaks" => cmd::PREFERENCEDTWEAKS,
         "preload" | "preloadbin" | "sys.azenith-preloadbin" => PRELOAD,
+        "bypass" => BYPASS,
         _ => return None,
     })
+}
+
+const BYPASS: &str = "bypass";
+
+/// Defaults AZenith main sets on install (customize.sh); the rom build has no
+/// installer, so the daemon fills in whatever is still empty.
+const DEFAULT_PROPS: &[(&str, &str)] = &[
+    ("persist.sys.azenithConfIntg.AIenabled", "1"),
+    ("persist.sys.azenithConfIntg.iosched", "1"),
+    ("persist.sys.azenithConfIntg.renderer", "default"),
+    ("persist.sys.azenithConfIntg.preloadbudget", "500M"),
+    ("persist.sys.azenithConfIntg.logd", "0"),
+    ("persist.sys.azenithConfIntg.DThermal", "0"),
+    ("persist.sys.azenithConfIntg.SFL", "0"),
+    ("persist.sys.azenithConfIntg.malisched", "0"),
+    ("persist.sys.azenithConfIntg.fpsged", "0"),
+    ("persist.sys.azenithConfIntg.schedtunes", "0"),
+    ("persist.sys.azenithConfIntg.clearbg", "0"),
+    ("persist.sys.azenithConfIntg.APreload", "0"),
+    ("persist.sys.azenithConfIntg.cpulimit", "0"),
+    ("persist.sys.azenithConfIntg.dnd", "0"),
+    ("persist.sys.azenithConfIntg.justintime", "0"),
+    ("persist.sys.azenithConfIntg.disabletrace", "0"),
+    ("persist.sys.azenithConfIntg.thermalcore", "0"),
+    ("persist.sys.azenithConfIntg.walttunes", "0"),
+    ("persist.sys.azenithConfIntg.fstrim", "0"),
+    ("persist.sys.azenithConfIntg.usefpsgo", "0"),
+];
+
+fn seed_default_props() {
+    use crate::common::android_ffi::{prop_get, prop_set};
+    for (k, v) in DEFAULT_PROPS {
+        if prop_get(k).is_none() {
+            prop_set(k, v);
+        }
+    }
 }
 
 /// NDK binder threadpool ceiling. AOSP's DEFAULT_MAX_BINDER_THREADS, the same
@@ -56,6 +93,7 @@ fn main() {
             cmd::UTILITYCONF => cmd::utility::run(rest),
             cmd::PREFERENCEDTWEAKS => cmd::prefs::run(rest),
             PRELOAD => preload::run(rest),
+            BYPASS => cmd::bypass::run(rest),
             _ => unreachable!(),
         }
         return;
@@ -65,6 +103,9 @@ fn main() {
     let _ = fs::create_dir_all(BASE_DIR);
     let _ = fs::create_dir_all(API_DIR);
     let _ = fs::create_dir_all(GAMELIST_DIR);
+    seed_default_props();
+    // a charge node left ON by a crashed run would keep the phone from charging
+    cmd::bypass::startup_restore();
 
     // single instance: two daemons would fight over the profile
     use fs2::FileExt;
@@ -143,6 +184,8 @@ fn main() {
     unsafe { (n.AParcel_delete)(reply); }
     info!(comp::DAEMON, "IProcessObserver registered with ActivityManager");
 
+    daemon::fps::start();
+    daemon::recorder::start();
     daemon::api::start_binder_server(); // hosted AIDL service via rsbinder
     init_status(); // register binder callbacks (screen/saver/zen) + read initial status
     seed(); // process table + initial state (profile 1/2/3, or 2/NULL if no game is on screen)
