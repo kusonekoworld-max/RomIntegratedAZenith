@@ -12,7 +12,7 @@
 #
 #  Every key below is named exactly like the Rust constant it generates, e.g.
 #
-#      BASE_DIR = "/data/vendor/AZenithInt"
+#      BASE_DIR = "/data/system/AZenithInt"
 #        -> pub(crate) const BASE_DIR: &str = "/data/vendor/AZenithInt";
 #
 # ---------------------------------------------------------------------
@@ -34,7 +34,7 @@
 #  Everything below is relative to this unless you give an absolute path.
 #  This is the one you will usually want to change.
 # ---------------------------------------------------------------------
-BASE_DIR = "/data/vendor/AZenithInt"
+BASE_DIR = "/data/system/AZenithInt"
 
 # ---------------------------------------------------------------------
 #  Directories (relative to BASE_DIR unless absolute)
@@ -68,6 +68,8 @@ BINDER_RESOLVER_APK = "binder_resolver.apk"
 # ---------------------------------------------------------------------
 # One package name per line. Changing GAMELIST_DIR above moves this file too.
 GAMELIST_FILE = "gamelist.txt"
+# Per-game configuration JSON managed alongside gamelist.txt.
+GAME_CONFIGS_FILE = "game_configs.json"
 # Applied profile as a mode number, written by the profiler worker.
 CURRENT_PROFILE = "current_profile"
 # Foreground package, "<pkg> <pid> <uid>" plus a timestamp.
@@ -92,4 +94,4 @@ STATE_FILE = "device_info.toml"
 #
 # Set this to your device's SoC before building, otherwise only the generic
 # (non-chipset) tweaks are applied.
-SOC = "mediatek"
+SOC = "snapdragon"

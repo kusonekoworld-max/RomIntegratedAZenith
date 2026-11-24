@@ -69,6 +69,7 @@ const FILE_KEYS: &[(&str, &str, &str)] = &[
     ("STATE_FILE", "state.toml", "API_DIR"),
     ("BINDER_RESOLVER_APK", "binder_resolver.apk", "BASE_DIR"),
     ("GAMELIST_FILE", "gamelist.txt", "GAMELIST_DIR"),
+    ("GAME_CONFIGS_FILE", "game_configs.json", "GAMELIST_DIR"),
     ("CURRENT_PROFILE", "current_profile", "API_DIR"),
     ("GAMEINFO", "gameinfo", "API_DIR"),
     ("SAVED_GOVERNOR", "saved_governor", "API_DIR"),
