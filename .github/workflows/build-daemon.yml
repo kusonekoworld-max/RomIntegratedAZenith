@@ -1,0 +1,119 @@
+name: Build ROM-Integrated AZenith Daemon
+
+on:
+  push:
+    branches: [ main, "feat/**" ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Cargo build profile"
+        required: true
+        default: "release"
+        type: choice
+        options:
+          - release
+          - debug
+      soc:
+        description: "Target SoC tweak profile"
+        required: true
+        default: "snapdragon"
+        type: choice
+        options:
+          - snapdragon
+          - mediatek
+          - exynos
+          - tensor
+          - unisoc
+          - none
+
+jobs:
+  build-daemon:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21 (for Binder Resolver)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+
+      - name: Set up Rust (aarch64-linux-android)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+
+      - name: Cache Cargo & Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            Cargo/target/
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-daemon-${{ hashFiles('Cargo/Cargo.lock', 'Resolver/gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-daemon-
+
+      - name: Apply workflow SoC override (manual dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.soc != '' }}
+        run: |
+          sed -i 's/^SOC = .*/SOC = "${{ github.event.inputs.soc }}"/' Config.toml
+          grep '^SOC =' Config.toml
+
+      - name: Build Resolver APK and AZenith daemon binary
+        run: |
+          set -euo pipefail
+          NDK_DIR="${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}}"
+          if [ -z "$NDK_DIR" ] && [ -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}/ndk" ]; then
+            NDK_DIR=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          fi
+          if [ -z "$NDK_DIR" ]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018"
+            NDK_DIR="$ANDROID_HOME/ndk/27.2.12479018"
+          fi
+          export ANDROID_NDK_HOME="$NDK_DIR"
+          export ANDROID_NDK_ROOT="$NDK_DIR"
+          export NDK_HOME="$NDK_DIR"
+          test -d "$ANDROID_NDK_HOME"
+          echo "Using NDK: $ANDROID_NDK_HOME"
+          chmod +x build_binary.sh Resolver/gradlew
+          if [ "${{ github.event.inputs.build_type }}" = "debug" ]; then
+            ./build_binary.sh --debug --rebuild-apk
+          else
+            ./build_binary.sh --release --rebuild-apk
+          fi
+
+      - name: Stage ROM integration artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p rom-artifacts/bin rom-artifacts/apk rom-artifacts/etc/init rom-artifacts/aidl/vendor/azenith rom-artifacts/sepolicy
+          test -f output/vendor.azenith-service
+          test -f Cargo/binder_resolver.apk
+          cp output/vendor.azenith-service rom-artifacts/bin/vendor.azenith-service
+          cp Cargo/binder_resolver.apk rom-artifacts/apk/BinderResolver.apk
+          cp init.azenith.rc rom-artifacts/etc/init/init.azenith.rc
+          cp Cargo/aidl/vendor/azenith/IAZenithService.aidl rom-artifacts/aidl/vendor/azenith/IAZenithService.aidl
+          cp azenith_sepolicy.cil vendor_sepolicy.cil rom-artifacts/sepolicy/
+          (cd rom-artifacts && sha256sum bin/vendor.azenith-service apk/BinderResolver.apk > SHA256SUMS)
+          ls -lh rom-artifacts/bin/vendor.azenith-service rom-artifacts/apk/BinderResolver.apk
+
+      - name: Upload ROM daemon artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: azenith-rom-daemon-${{ github.sha }}
+          path: rom-artifacts/
+          if-no-files-found: error

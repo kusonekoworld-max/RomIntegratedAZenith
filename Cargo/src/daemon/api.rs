@@ -14,13 +14,17 @@ use crate::common::log::{comp, error, info};
 use crate::common::paths::STATE_FILE;
 use crate::daemon::applist;
 
-pub(crate) const IFACE_VERSION: i32 = 1;
+pub(crate) const IFACE_VERSION: i32 = 4;
 
 const SERVICE_NAME: &str = "vendor.azenith.IAZenithService/default";
 
 struct AZenithService;
 
 impl Interface for AZenithService {}
+
+fn is_valid_config_key(key: &str) -> bool {
+    !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
 
 impl IAZenithService for AZenithService {
     fn getApiVersion(&self) -> BinderResult<i32> {
@@ -38,7 +42,7 @@ impl IAZenithService for AZenithService {
     }
 
     fn setConfig(&self, key: &str, value: &str) -> BinderResult<bool> {
-        if key.is_empty() || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        if !is_valid_config_key(key) {
             error!(comp::DAEMON, "aidl: rejected config key '{key}'");
             return Ok(false);
         }
@@ -61,17 +65,32 @@ impl IAZenithService for AZenithService {
     fn getState(&self) -> BinderResult<String> {
         Ok(std::fs::read_to_string(STATE_FILE).unwrap_or_default())
     }
+
+    fn getConfig(&self, key: &str) -> BinderResult<String> {
+        if !is_valid_config_key(key) {
+            error!(comp::DAEMON, "aidl: rejected getConfig key '{key}'");
+            return Ok(String::new());
+        }
+        Ok(crate::common::prop::getprop(&format!("persist.sys.azenithConfIntg.{key}")))
+    }
+
+    fn getGameConfigs(&self) -> BinderResult<String> {
+        Ok(applist::game_configs_json())
+    }
+
+    fn setGameConfig(&self, pkg: &str, config_json: &str) -> BinderResult<bool> {
+        Ok(!pkg.is_empty() && applist::set_game_config(pkg, config_json))
+    }
+
+    fn removeGameConfig(&self, pkg: &str) -> BinderResult<bool> {
+        Ok(!pkg.is_empty() && applist::set_game(pkg, false))
+    }
+
+    fn rescanGames(&self) -> BinderResult<bool> {
+        Ok(applist::rescan_games())
+    }
 }
 
-/// Registers the service and starts rsbinder's thread pool. Called after the
-/// daemon's own libbinder_ndk pool is up: the two use separate binder fds and
-/// separate thread pools, so rsbinder needs its own or incoming transactions to
-/// this service are never dispatched.
-///
-/// init_default() must come first — both add_service and start_thread_pool route
-/// through ProcessState::self(), which aborts with "ProcessState is not
-/// initialized!" otherwise. Only start_thread_pool, not join_thread_pool: the
-/// calling thread must stay free because main() joins the libbinder_ndk pool last.
 pub(crate) fn start_binder_server() {
     rsbinder::ProcessState::init_default()
         .expect("Failed to initialize binder ProcessState");
