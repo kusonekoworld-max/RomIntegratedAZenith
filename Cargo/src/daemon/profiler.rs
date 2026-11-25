@@ -12,6 +12,7 @@ use crate::common::android_ffi::prop_get;
 use crate::common::prop;
 use crate::common::shell;
 use crate::daemon::applist;
+use crate::daemon::notify;
 use crate::daemon::state::{saver, screen, write_atomic};
 
 pub(crate) use crate::common::paths::{CURRENT_PROFILE as PROFILE_FILE, GAMEINFO as GAMEINFO_FILE};
@@ -74,6 +75,7 @@ fn manual_profile_override() -> Option<u8> {
 
 pub(crate) fn init() {
     info!(comp::PROFILER, "profiler initialized");
+    notify::notify("Initializing...", "Starting AZenith service...", false, 0);
     let (tx, rx) = mpsc::channel::<u8>();
     *TX.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
     thread::spawn(move || {
@@ -304,12 +306,48 @@ fn apply(mode: u8, active: &Option<(String, BTreeSet<i32>)>, why: &str) {
     }
 
     queue_profile(mode);
-    broadcast_profile_change(mode, active);
+    announce_profile(from, mode, active);
     // bypass charging only runs in performance
     crate::cmd::bypass::reevaluate_async();
 }
 
-fn broadcast_profile_change(mode: u8, active: &Option<(String, BTreeSet<i32>)>) {
+/// Toast + notification card for a profile change: same titles/texts as the
+/// module's daemon, delivered to the AZenith app. In auto mode the
+/// "Running at <app>" card is also what opens the sidepanel.
+fn announce_profile(from: u8, mode: u8, active: &Option<(String, BTreeSet<i32>)>) {
+    if !manual_mode() || from == 0 {
+        let app = match active {
+            Some((pkg, _)) if !pkg.is_empty() && pkg != "NULL" => pkg.as_str(),
+            _ => "unknown",
+        };
+        match mode {
+            MODE_PERF => {
+                notify::toast("Applying Performance Profile");
+                notify::notify("Performance Profile", &format!("Running at {app}"), false, 0);
+            }
+            MODE_ECO => {
+                notify::toast("Applying Eco Mode");
+                notify::notify("ECO Mode", "System is now at Endurance state", false, 0);
+            }
+            MODE_BALANCED => {
+                notify::toast("Applying Balanced Profile");
+                notify::notify("Balanced Profile", "System is now at Optimal state", false, 0);
+            }
+            _ => {}
+        }
+    }
+    if from == 0 {
+        notify::notify("Daemon Info", "AZenith is running successfully", false, 60000);
+    }
+    broadcast_rianixia(mode, active);
+}
+
+/// Legacy RianixiaOS overlay broadcast. Off unless the ROM opts in with
+/// `persist.sys.azenithIntg.rianixia_overlay=1`.
+fn broadcast_rianixia(mode: u8, active: &Option<(String, BTreeSet<i32>)>) {
+    if prop::getprop("persist.sys.azenithIntg.rianixia_overlay") != "1" {
+        return;
+    }
     let mode_str = mode_name(mode);
     let pkg_arg = match active {
         Some((pkg, _)) if !pkg.is_empty() && pkg != "NULL" => format!(" --es pkg {pkg}"),
@@ -342,6 +380,10 @@ pub(crate) fn checkup(active: &Option<(String, BTreeSet<i32>)>, why: &str) {
     } else {
         MODE_BALANCED
     };
+
+    if manual_mode() {
+        notify::sync_manual_sidepanel(active.as_ref().map(|(p, _)| p.as_str()));
+    }
 
     let mut grace = GRACE.lock().unwrap_or_else(|e| e.into_inner());
     if manual_profile_override().is_none()

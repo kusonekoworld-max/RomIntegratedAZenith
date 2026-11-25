@@ -55,6 +55,7 @@ pub(crate) mod comp {
     pub(crate) const STATE: &str = "daemon.state";
     pub(crate) const PROFILER: &str = "daemon.profiler";
     pub(crate) const TASKS: &str = "daemon.tasks";
+    pub(crate) const NOTIFY: &str = "daemon.notify";
 
     // cmd.<command>.<subsystem>: the companion commands.
     pub(crate) const BYPASS: &str = "cmd.bypass";
